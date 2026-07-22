@@ -146,6 +146,56 @@
                 #expect(pairs(step)["reason"] == "trace")
             }
         }
+
+        // Module with a mutable global for exercising qWasmGlobal end-to-end through the handler.
+        static let globalWAT = """
+            (module
+              (global $g (mut i32) (i32.const 7))
+              (func (export "_start") (result i32) (global.get $g)))
+            """
+
+        private func withGlobalHandler<R>(_ body: (WasmKitGDBHandler) async throws -> R) async throws -> R {
+            let bytes = try wat2wasm(Self.globalWAT)
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("wasmkit-gdb-\(UUID().uuidString).wasm")
+            try Data(bytes).write(to: url)
+            var log = Logger(label: "test")
+            log.logLevel = .critical
+            let h = try await WasmKitGDBHandler(
+                moduleFilePath: FilePath(url.path),
+                engineConfiguration: EngineConfiguration(),
+                logger: log, allocator: ByteBufferAllocator())
+            do {
+                let result = try await body(h)
+                try await h.close()
+                return result
+            } catch {
+                try await h.close()
+                throw error
+            }
+        }
+
+        @Test
+        func wasmGlobalRepliesWithLittleEndianValue() async throws {
+            try await withGlobalHandler { h in
+                let resp = try await h.handle(command: .init(kind: .wasmGlobal, arguments: "0;0"))
+                guard case .hexEncodedBinary(let view) = resp.kind else {
+                    Issue.record("expected hexEncodedBinary, got \(resp.kind)")
+                    return
+                }
+                var buffer = ByteBuffer(bytes: view)
+                #expect(buffer.readInteger(endianness: .little, as: UInt64.self) == 7)
+            }
+        }
+
+        @Test
+        func wasmGlobalRejectsMissingIndex() async throws {
+            _ = try await withGlobalHandler { h in
+                await #expect(throws: WasmKitGDBHandler.Error.self) {
+                    _ = try await h.handle(command: .init(kind: .wasmGlobal, arguments: "0;"))
+                }
+            }
+        }
     }
 
 #endif
