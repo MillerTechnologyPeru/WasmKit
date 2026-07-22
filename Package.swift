@@ -6,9 +6,12 @@ import class Foundation.ProcessInfo
 
 let DarwinPlatforms: [Platform] = [.macOS, .iOS, .watchOS, .tvOS, .visionOS]
 
-let swiftSettings: [SwiftSetting] = [
-    .treatAllWarnings(as: .error, .when(platforms: DarwinPlatforms + [.linux, .wasi, .android, .openbsd]))
-]
+// Warnings are not forced to errors here. Xcode passes `-suppress-warnings` to package
+// dependencies, and swiftc rejects that combined with `-warnings-as-errors`:
+//   error: Conflicting options '-warnings-as-errors' and '-suppress-warnings'
+// which makes any app that depends on WasmKit fail to build in Xcode. A package should not impose
+// its warning policy on consumers; enable it in CI instead.
+let swiftSettings: [SwiftSetting] = []
 
 let cliCommandsTarget = Target.target(
     name: "CLICommands",
