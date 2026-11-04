@@ -87,11 +87,15 @@ typedef SWIFT_CC(swiftasync) void (* _Nonnull wasmkit_tc_exec)(
 /// with the ClangImporter that ignores the explicitly specified calling
 /// convention and it leads to a miscompilation of the tail call.
 /// See https://github.com/swiftlang/swift/issues/69264
-static inline void wasmkit_tc_start(
+/// Runs instruction handlers until one returns.
+///
+/// Defined in _CWasmKit.c rather than inline: the handlers use the
+/// swiftasync convention, whose context register (x22 on arm64) they do not
+/// preserve. A C function saves its callee-saved registers around the call;
+/// inlined into a Swift caller, the call was assumed to preserve them.
+void wasmkit_tc_start(
     wasmkit_tc_exec exec, Sp sp, Pc pc, Md md, Ms ms, void *_Nullable state
-) {
-  exec(sp, pc, md, ms, state);
-}
+);
 #endif
 
 static inline void wasmkit_fwrite_stderr(const char *_Nonnull str, size_t len) {
